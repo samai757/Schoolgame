@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ER Rush</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  /* ER floor: a side-on waiting line (door left, exam rooms right) above a patient chart.
+     Clinical surfaces, scrub-teal brand, triage-tag green / amber / red for urgency, X-ray film fixed dark in both themes. */
+  --bg:#e8eef1; --surface:#ffffff; --surface-2:#f2f6f8; --ink:#13232c; --muted:#566a76; --line:#cbd8df;
+  --brand:#0b7a75; --brand-ink:#ffffff;
+  --good:#1a8d56; --good-bg:#e1f4ea; --warn:#b97c00; --bad:#cf3a33; --bad-bg:#fde8e6; --focus:#1f6feb;
+  --wall:#dfe9ee; --wall-band:#c6d8e0; --floor:#c9d5db; --floor-line:#b6c4cb; --door:#9fb3bd; --glass:#e9f4f8;
+  --spot:#0b7a75; --freeze:rgba(74,163,223,.18);
+  --film:#0c1820; --film-2:#132631; --xbone:#c9dfea; --xdim:#6f8c9b; --xhit:#ffb020; --xtext:#a9c3d0;
+  --font-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --font-body:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b161d; --surface:#122530; --surface-2:#17303d; --ink:#e7f0f4; --muted:#93aab6; --line:#25404d;
+    --brand:#2bb4ad; --brand-ink:#04211f;
+    --good:#3fcf8b; --good-bg:#12382a; --warn:#f0b33a; --bad:#ff7a73; --bad-bg:#43201f; --focus:#6aa6ff;
+    --wall:#15303c; --wall-band:#1c3d4b; --floor:#1d3540; --floor-line:#264451; --door:#3b5866; --glass:#21424f;
+    --spot:#2bb4ad; --freeze:rgba(106,166,255,.16);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b161d; --surface:#122530; --surface-2:#17303d; --ink:#e7f0f4; --muted:#93aab6; --line:#25404d;
+  --brand:#2bb4ad; --brand-ink:#04211f;
+  --good:#3fcf8b; --good-bg:#12382a; --warn:#f0b33a; --bad:#ff7a73; --bad-bg:#43201f; --focus:#6aa6ff;
+  --wall:#15303c; --wall-band:#1c3d4b; --floor:#1d3540; --floor-line:#264451; --door:#3b5866; --glass:#21424f;
+  --spot:#2bb4ad; --freeze:rgba(106,166,255,.16);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45}
+.wrap{max-width:1080px;margin:0 auto;padding-block:18px 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;line-height:1.05}
+p{margin:0}
+.muted{color:var(--muted)}
+.eyebrow{font-family:var(--font-display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:.95rem;color:var(--brand)}
+button{font:inherit;color:inherit}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:10px 20px;border:2px solid var(--brand);background:var(--brand);color:var(--brand-ink);border-radius:10px;font-weight:700;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.small{min-height:40px;padding:6px 12px;font-size:.92rem}
+.btn:disabled{opacity:.45;cursor:default}
+.btn:not(:disabled):hover{filter:brightness(1.06)}
+.btn.ghost:not(:disabled):hover{border-color:var(--brand)}
+.btn:focus-visible,.ppl:focus-visible,.opt:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+
+/* ---------- title ---------- */
+#title{display:grid;gap:22px;grid-template-columns:minmax(0,1fr);padding-top:8px}
+@media (min-width:860px){#title{grid-template-columns:minmax(0,7fr) minmax(0,5fr);align-items:center}}
+.t-copy{display:grid;gap:18px;min-width:0}
+#title h1{font-size:clamp(4rem,15vw,7.5rem);font-weight:800;letter-spacing:-.01em;text-transform:uppercase}
+#title h1 span{color:var(--bad)}
+.lede{font-size:1.15rem;max-width:52ch}
+.rules{display:grid;gap:8px;margin:0;padding:0;list-style:none;max-width:62ch}
+.rules li{display:grid;grid-template-columns:5.6rem minmax(0,1fr);gap:12px;align-items:baseline}
+.rules b{font-family:var(--font-display);font-size:1.15rem;letter-spacing:.04em;text-transform:uppercase}
+.actions{display:flex;flex-wrap:wrap;gap:12px}
+.t-art{position:relative;height:300px;border-radius:16px;overflow:hidden;border:2px solid var(--line);background:var(--wall)}
+.t-art .floor{height:36%}
+.t-art .tfig{position:absolute;bottom:16px;height:230px}
+.t-art .tfig svg{height:100%;width:auto;display:block}
+.t-art .tag{position:absolute;font-family:var(--font-display);font-weight:700;font-size:.95rem;letter-spacing:.06em;text-transform:uppercase;background:var(--surface);border:2px solid var(--bad);color:var(--bad);border-radius:8px;padding:2px 8px}
+
+/* ---------- hud ---------- */
+.hud{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-width:0}
+.lbl{display:block;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.stat b{font-family:var(--font-display);font-size:1.9rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+.hearts{display:flex;gap:2px;padding-top:4px}
+.hearts svg{width:22px;height:22px;fill:var(--bad)}
+.hearts svg.off{fill:var(--line)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px;align-items:center}
+.toolbar .spacer{flex:1 1 0}
+.toolbar .n{font-variant-numeric:tabular-nums;background:var(--brand-ink);color:var(--brand);border-radius:999px;min-width:1.5em;padding:0 6px;text-align:center;font-size:.85rem}
+.sec-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+.sec-h h2{font-size:1.35rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.sec-h small{font-size:.88rem;color:var(--muted);font-weight:600}
+
+/* ---------- scene ---------- */
+.scene{--fh:150px;--doorw:86px;--exitw:56px;--sp:120px;position:relative;height:calc(var(--fh) + 100px);border-radius:16px;overflow:hidden;border:2px solid var(--line);background:var(--wall);user-select:none;-webkit-user-select:none}
+@media (max-width:640px){.scene{--fh:106px;--doorw:50px;--exitw:30px}}
+.wallband{position:absolute;left:0;right:0;top:46%;height:10px;background:var(--wall-band)}
+.floor{position:absolute;left:0;right:0;bottom:0;height:38%;background-color:var(--floor);background-image:repeating-linear-gradient(90deg,var(--floor-line) 0 2px,transparent 2px 64px),linear-gradient(var(--floor-line),var(--floor-line));background-size:auto,100% 2px;background-repeat:repeat,no-repeat;background-position:0 0,0 34%}
+.door{position:absolute;left:8px;top:30px;bottom:24%;width:calc(var(--doorw) - 16px);background:var(--door);border-radius:6px 6px 0 0;padding:16px 5px 0;display:flex;gap:3px}
+.door .glass{flex:1;background:var(--glass);border-radius:2px;opacity:.9}
+.door .sign .sm{display:none}
+.door .sign{position:absolute;left:50%;top:-22px;transform:translateX(-50%);background:var(--bad);color:#fff;font-family:var(--font-display);font-weight:800;letter-spacing:.08em;font-size:.82rem;padding:1px 6px;border-radius:4px;white-space:nowrap}
+.exitsign{position:absolute;right:8px;top:12px;font-family:var(--font-display);font-weight:700;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);background:var(--surface);border:2px solid var(--brand);border-radius:6px;padding:1px 7px;white-space:nowrap}
+@media (max-width:640px){.door .sign .lg{display:none}.door .sign .sm{display:inline}.door .sign{font-size:.8rem;padding:1px 5px}.exitsign{font-size:.72rem;padding:0 5px}}
+.spot{position:absolute;bottom:14px;width:calc(var(--sp) * .62);max-width:60px;height:12px;margin-left:calc(min(var(--sp) * .62, 60px) / -2);border-radius:50%;border:2px dashed var(--spot);opacity:.55}
+.spot.locked{border-color:var(--muted);opacity:.3}
+.spot small{position:absolute;top:13px;left:50%;transform:translateX(-50%);font-size:.66rem;font-weight:700;color:var(--muted);white-space:nowrap;letter-spacing:.03em}
+.ppl{position:absolute;left:0;bottom:6px;display:flex;flex-direction:column;align-items:center;gap:2px;width:calc(var(--fh) * .44);margin-left:calc(var(--fh) * -.22);cursor:pointer;transition-property:transform,opacity;transition-timing-function:linear;background:none;border:0;padding:0;z-index:2}
+.ppl.entering{opacity:0}
+.ppl.gone{opacity:0}
+.ppl .fig{height:var(--fh);width:auto;display:block;overflow:visible}
+.ppl .pbar{width:78%;height:6px;border-radius:4px;background:var(--line);overflow:hidden;flex:none}
+.ppl .pbar i{display:block;height:100%;width:100%;background:var(--good)}
+.ppl.tone-a .pbar i{background:var(--warn)}
+.ppl.tone-r .pbar i{background:var(--bad)}
+.ppl.trauma .pbar{outline:2px solid var(--bad);outline-offset:1px}
+.ppl .pname{font-size:.74rem;font-weight:700;line-height:1;white-space:nowrap;max-width:calc(var(--sp) - 4px);overflow:hidden;text-overflow:ellipsis;color:var(--ink);background:var(--surface);border-radius:999px;padding:2px 6px}
+.ppl.sel .pname{background:var(--brand);color:var(--brand-ink)}
+.ppl.sel::before{content:"";position:absolute;bottom:14px;left:50%;width:120%;height:14px;transform:translateX(-50%);border-radius:50%;background:var(--spot);opacity:.35;z-index:-1}
+.ppl.leaving{pointer-events:none}
+.ppl.leaving .pbar{visibility:hidden}
+.bubble{position:absolute;top:-6px;right:-10px;font-family:var(--font-display);font-weight:800;font-size:.95rem;line-height:1;padding:3px 6px;border-radius:8px;background:var(--surface);border:2px solid var(--line)}
+.bubble.good{color:var(--good);border-color:var(--good)}
+.bubble.bad{color:var(--bad);border-color:var(--bad)}
+.freeze{position:absolute;inset:0;background:var(--freeze);display:flex;align-items:flex-start;justify-content:center;padding-top:10px;pointer-events:none;z-index:3}
+.freeze span{font-family:var(--font-display);font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--surface);border:2px solid var(--focus);color:var(--focus);border-radius:8px;padding:2px 10px}
+
+/* figure parts */
+.fig .glow{animation:pulse 1.1s ease-in-out infinite alternate}
+@keyframes pulse{from{opacity:.55}to{opacity:.95}}
+.fig .m{display:none}
+.tone-g .fig .m-ok,.tone-a .fig .m-worry,.tone-r .fig .m-pain{display:inline}
+.mood-happy .fig .m{display:none!important}.mood-happy .fig .m-happy{display:inline!important}
+.mood-sad .fig .m{display:none!important}.mood-sad .fig .m-pain{display:inline!important}
+.fig .legL,.fig .legR,.fig .armL,.fig .armR{transform-box:view-box}
+.fig .legL{transform-origin:23.5px 78px}.fig .legR{transform-origin:36.5px 78px}
+.fig .armL{transform-origin:15px 39px}.fig .armR{transform-origin:45px 39px}
+.walking .fig .legL{animation:swA .42s ease-in-out infinite alternate}
+.walking .fig .legR{animation:swB .42s ease-in-out infinite alternate}
+.walking .fig .armL{animation:swB .42s ease-in-out infinite alternate}
+.walking .fig .armR{animation:swA .42s ease-in-out infinite alternate}
+.walking .fig{animation:bob .21s ease-in-out infinite alternate}
+@keyframes swA{from{transform:rotate(13deg)}to{transform:rotate(-13deg)}}
+@keyframes swB{from{transform:rotate(-13deg)}to{transform:rotate(13deg)}}
+@keyframes bob{from{transform:translateY(0)}to{transform:translateY(-2px)}}
+
+/* ---------- chart ---------- */
+.chart{display:grid;gap:16px;grid-template-columns:minmax(0,1fr);background:var(--surface);border:2px solid var(--line);border-radius:16px;padding:16px;margin-top:14px}
+@media (min-width:760px){.chart{grid-template-columns:minmax(0,5fr) minmax(0,7fr);align-items:start}}
+.visual{min-width:0}
+.exam{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center;background:var(--surface-2);border-radius:12px;padding:12px}
+@media (min-width:760px){.exam{grid-template-columns:minmax(0,1fr);justify-items:center;text-align:center;padding:16px 12px}}
+.exam .fig{height:170px;width:auto;display:block}
+@media (min-width:760px){.exam .fig{height:250px}}
+.hurt{display:grid;gap:4px}
+.hurt b{font-family:var(--font-display);font-size:1.35rem;letter-spacing:.03em;text-transform:uppercase}
+.hurt .pain{color:var(--bad)}
+.hurt span{font-size:.92rem;color:var(--muted)}
+.xray{background:var(--film);border-radius:12px;padding:12px;display:grid;gap:10px;animation:fadein .35s ease-out}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.xr-imgs{display:flex;gap:8px;justify-content:center;align-items:flex-end}
+.xr-imgs svg{display:block;height:300px;width:auto;max-width:100%;min-width:0}
+.xr-imgs svg.zoom{height:190px;background:var(--film-2);border-radius:10px}
+@media (max-width:480px){.xr-imgs svg{height:240px}.xr-imgs svg.zoom{height:150px}}
+.xr-cap{color:var(--xtext);font-size:.95rem;text-align:center}
+.xr-cap b{display:block;color:var(--xhit);font-family:var(--font-display);font-size:1.3rem;letter-spacing:.04em;text-transform:uppercase}
+.xr .b{fill:var(--xbone);opacity:.82}
+.xr .s{stroke:var(--xbone);fill:none;opacity:.82;stroke-linecap:round}
+.xr .hole{fill:var(--film)}
+.xr .z .hole{fill:var(--film-2)}
+.xr .lab{fill:var(--xtext);font:600 9px var(--font-body)}
+.xr .hit{fill:var(--xhit);opacity:1;animation:xpulse .9s ease-in-out infinite alternate}
+.xr .s.hit{stroke:var(--xhit);fill:none}
+@keyframes xpulse{from{opacity:.7}to{opacity:1}}
+.qa{display:grid;gap:12px;min-width:0}
+.ch-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.ch-name{font-family:var(--font-display);font-size:1.6rem;font-weight:700;line-height:1.1}
+.ch-cx{color:var(--muted);font-size:.95rem}
+.ch-pay{margin-left:auto;font-weight:700;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:right;line-height:1.3}
+.ch-pay.trauma{color:var(--bad)}
+.q{font-size:1.12rem;font-weight:500;overflow-wrap:anywhere}
+.opts{display:grid;gap:8px}
+.opt{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center;width:100%;text-align:left;padding:10px 14px;min-height:50px;border-radius:10px;border:2px solid var(--line);background:var(--surface-2);cursor:pointer;font-weight:600;overflow-wrap:anywhere}
+.opt .k{display:grid;place-items:center;width:26px;height:26px;border-radius:6px;background:var(--surface);border:1px solid var(--line);font-size:.85rem;color:var(--muted)}
+.opt:not(:disabled):hover{border-color:var(--brand)}
+.opt:disabled{cursor:default}
+.opt.gone{opacity:.3}
+.opt.right{border-color:var(--good);background:var(--good-bg)}
+.opt.wrong{border-color:var(--bad);background:var(--bad-bg)}
+.fb{display:grid;gap:8px}
+.fb-res{font-family:var(--font-display);font-size:1.5rem;font-weight:700}
+.fb-res.good{color:var(--good)}
+.fb-res.bad{color:var(--bad)}
+.note{font-size:.95rem;color:var(--muted)}
+.idle{grid-column:1 / -1;padding:26px 8px;text-align:center;color:var(--muted)}
+.idle b{display:block;font-family:var(--font-display);font-size:1.5rem;color:var(--ink);margin-bottom:4px}
+
+/* ---------- over ---------- */
+#over{display:grid;gap:18px;max-width:780px}
+#over h2{font-size:3rem;font-weight:800;text-transform:uppercase}
+.rank{font-family:var(--font-display);font-size:1.7rem;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:.04em}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.review{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.review li{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--bad);border-radius:10px;padding:12px 14px;display:grid;gap:4px}
+
+/* ---------- overlays + toasts ---------- */
+.overlay{position:fixed;inset:0;background:rgba(5,15,20,.7);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+.modal{background:var(--surface);border-radius:14px;max-width:860px;width:100%;max-height:92vh;overflow:auto;padding:16px;display:grid;gap:12px}
+.modal img{width:100%;height:auto;display:block;border-radius:8px;background:#fff}
+.modal .row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+#toasts{position:fixed;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;gap:8px;padding:0 16px calc(14px + env(safe-area-inset-bottom,0px));pointer-events:none;z-index:30}
+.toast{background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-weight:600;font-size:.95rem;max-width:100%;text-align:center;animation:pop .2s ease-out}
+.toast.bad{background:var(--bad);color:#fff}
+.toast.good{background:var(--good);color:#fff}
+@keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+@media (max-width:480px){.hud{grid-template-columns:repeat(2,minmax(0,1fr))}.stat b{font-size:1.6rem}}
+@media (prefers-reduced-motion: reduce){.fig .glow,.xr .hit{animation:none}.walking .fig,.walking .fig *{animation:none!important}}
+</style>
+</head>
+<body>
+
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <radialGradient id="erGlow"><stop offset="0" stop-color="#ff1f1f" stop-opacity="1"/><stop offset=".6" stop-color="#ff2d2d" stop-opacity=".75"/><stop offset="1" stop-color="#ff3b30" stop-opacity=".1"/></radialGradient>
+  </defs>
+</svg>
+
+<main class="wrap">
+  <section id="title">
+    <div class="t-copy">
+      <p class="eyebrow">Skeletal system review</p>
+      <h1>ER <span>Rush</span></h1>
+      <p class="lede">Patients are lining up at the door, and the red glow shows where it hurts. Name the bone, collect the cash, and keep your reputation from hitting zero.</p>
+      <ul class="rules">
+        <li><b>Triage</b><span>Tap anyone in line to open their chart. The most urgent patient opens for you.</span></li>
+        <li><b>Treat</b><span>Pick the right answer before their patience bar runs out. Faster pays more.</span></li>
+        <li><b>X-ray</b><span>After every answer, the X-ray lights up the exact bone.</span></li>
+        <li><b>Cash</b><span>$100 per patient. Trauma patients pay 3x. Streaks multiply your cash up to 2x.</span></li>
+        <li><b>Rep</b><span>A wrong answer or a patient who walks out costs one heart. Lose all five and your shift ends.</span></li>
+        <li><b>Rush</b><span>Every 5 patients treated opens another spot in line and speeds up arrivals. A 5-streak earns a 50/50, and an 8-streak earns a coffee break that freezes every timer.</span></li>
+      </ul>
+      <div class="actions">
+        <button id="startBtn" class="btn" type="button">Start shift</button>
+        <button id="mapBtn1" class="btn ghost" type="button" hidden>Skeleton map</button>
+      </div>
+      <p id="bestLine" class="muted"></p>
+    </div>
+    <div class="t-art" id="tArt" aria-hidden="true"><div class="wallband"></div><div class="floor"></div></div>
+  </section>
+
+  <section id="game" hidden>
+    <div class="hud">
+      <div class="stat"><span class="lbl">Cash</span><b id="hCash">$0</b></div>
+      <div class="stat"><span class="lbl">Streak</span><b id="hStreak">0</b></div>
+      <div class="stat"><span class="lbl">Shift</span><b id="hShift">1</b></div>
+      <div class="stat"><span class="lbl">Reputation</span><div id="hHearts" class="hearts" role="img" aria-label="Reputation"></div></div>
+    </div>
+    <div class="toolbar">
+      <button id="pu50" class="btn small" type="button">50/50 <span class="n" id="n50">0</span></button>
+      <button id="puCof" class="btn small" type="button"><span id="cofLbl">Coffee break</span> <span class="n" id="nCof">0</span></button>
+      <span class="spacer"></span>
+      <button id="pauseBtn" class="btn small ghost" type="button">Pause</button>
+      <button id="muteBtn" class="btn small ghost" type="button">Sound on</button>
+      <button id="endBtn" class="btn small ghost" type="button">End shift</button>
+    </div>
+    <div class="sec-h"><h2>Waiting line</h2><small id="lineCount"></small></div>
+    <div class="scene" id="scene">
+      <div class="wallband"></div>
+      <div class="floor"></div>
+      <div class="door"><span class="sign"><span class="lg">EMERGENCY</span><span class="sm">ER</span></span><div class="glass"></div><div class="glass"></div></div>
+      <div class="exitsign">Exam &rarr;</div>
+      <div id="spots"></div>
+      <div id="line"></div>
+      <div class="freeze" id="freeze" hidden><span>Coffee break: timers frozen</span></div>
+    </div>
+    <div id="chart" class="chart" aria-live="polite"></div>
+  </section>
+
+  <section id="over" hidden>
+    <p class="eyebrow">Shift report</p>
+    <h2>Shift over</h2>
+    <p id="rankLine" class="rank"></p>
+    <div class="sum" id="sum"></div>
+    <div>
+      <h3 style="font-size:1.6rem;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em">Charts to review</h3>
+      <ul class="review" id="review"></ul>
+    </div>
+    <div class="actions">
+      <button id="againBtn" class="btn" type="button">Start another shift</button>
+      <button id="mapBtn2" class="btn ghost" type="button" hidden>Skeleton map</button>
+    </div>
+  </section>
+</main>
+
+<div class="overlay" id="mapOv" hidden role="dialog" aria-modal="true" aria-label="Skeleton map">
+  <div class="modal">
+    <div class="row"><h3 style="font-size:1.6rem">Skeleton map</h3><button id="mapClose" class="btn small" type="button">Close</button></div>
+    <img id="mapImg" alt="Labeled front view of the human skeleton. Axial bones are blue and appendicular bones are orange.">
+  </div>
+</div>
+<div class="overlay" id="pauseOv" hidden role="dialog" aria-modal="true" aria-label="Paused">
+  <div class="modal" style="max-width:380px;text-align:center">
+    <h3 style="font-size:2rem">Paused</h3>
+    <p class="muted">The waiting line is on hold.</p>
+    <button id="resumeBtn" class="btn" type="button">Resume</button>
+  </div>
+</div>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+var BANK = [{"q": "How many bones make up the conventional adult skull (not counting the ossicles or the hyoid)?", "correct": "22", "wrong": ["8", "14", "28"], "note": "8 cranial + 14 facial = 22.", "region": "Skull", "cat": "Count", "hl": ["skullAll"], "xl": "All 22 skull bones: 8 cranial + 14 facial"}, {"q": "Which group of skull bones surrounds and protects the brain?", "correct": "Cranial bones", "wrong": ["Facial bones", "Auditory ossicles", "The hyoid"], "note": "Eight cranial bones enclose the brain; fourteen facial bones shape the face.", "region": "Skull", "cat": "Function", "hl": ["cranial"], "xl": "Cranial bones (the occipital is at the back, hidden in this view)"}, {"q": "Which cranial bone forms the back of the cranium and contains the foramen magnum?", "correct": "Occipital", "wrong": ["Parietal", "Sphenoid", "Temporal"], "note": "Occipital bone; meets the parietals at the lambdoid suture.", "region": "Skull", "cat": "Name/Location", "hl": ["occipital"], "xl": "Occipital bone: back and base of the skull, hidden in a front view"}, {"q": "What structure passes through the foramen magnum?", "correct": "The brainstem, continuing into the spinal cord", "wrong": ["The optic nerve", "The internal carotid artery", "The olfactory nerves"], "note": "Occipital condyles beside it meet the atlas (C1).", "region": "Skull", "cat": "Marking", "hl": ["occipital"], "xl": "Foramen magnum: the big opening in the occipital bone at the skull base"}, {"q": "Which bone forms the forehead and part of the roof of each orbit?", "correct": "Frontal", "wrong": ["Parietal", "Ethmoid", "Zygomatic"], "note": "Frontal bone.", "region": "Skull", "cat": "Name/Location", "hl": ["frontal"], "xl": "Frontal bone"}, {"q": "Which paired cranial bones form much of the top and sides of the cranium?", "correct": "Parietal bones", "wrong": ["Temporal bones", "Frontal bones", "Occipital bones"], "note": "They meet along the sagittal suture.", "region": "Skull", "cat": "Name/Location", "hl": ["parietal"], "xl": "Parietal bones"}, {"q": "The mastoid process, styloid process, and external acoustic meatus are all part of which bone?", "correct": "Temporal", "wrong": ["Occipital", "Sphenoid", "Maxilla"], "note": "Temporal bones lie on the sides of the skull, inferior to the parietals.", "region": "Skull", "cat": "Marking", "hl": ["temporal"], "xl": "Temporal bones"}, {"q": "The sella turcica, a depression that holds the pituitary gland, is part of which bone?", "correct": "Sphenoid", "wrong": ["Ethmoid", "Frontal", "Temporal"], "note": "The butterfly-shaped sphenoid sits at the center of the skull base.", "region": "Skull", "cat": "Marking", "hl": ["sphenoid"], "xl": "Sphenoid bone (greater wings show at the temples)"}, {"q": "Which bone has the crista galli and the cribriform plates that let smell nerve fibers pass?", "correct": "Ethmoid", "wrong": ["Sphenoid", "Vomer", "Lacrimal"], "note": "Ethmoid; also has the superior and middle nasal conchae.", "region": "Skull", "cat": "Marking", "hl": ["ethmoid"], "xl": "Ethmoid bone: between the orbits and roof of the nasal cavity"}, {"q": "Which facial bone is the lower jaw, the largest and strongest facial bone?", "correct": "Mandible", "wrong": ["Maxilla", "Zygomatic bone", "Vomer"], "note": "Joins the temporal bones at the temporomandibular joints.", "region": "Skull", "cat": "Name/Location", "hl": ["mandible"], "xl": "Mandible"}, {"q": "Which paired facial bones form the upper jaw and hold the upper teeth in alveoli?", "correct": "Maxillae", "wrong": ["Palatine bones", "Nasal bones", "Zygomatic bones"], "note": "Maxillae also form the front of the hard palate.", "region": "Skull", "cat": "Name/Location", "hl": ["maxilla"], "xl": "Maxillae"}, {"q": "Which small paired facial bones lie in the medial walls of the orbits and help drain tears?", "correct": "Lacrimal bones", "wrong": ["Nasal bones", "Palatine bones", "Inferior nasal conchae"], "note": "Smallest, tear-duct groove.", "region": "Skull", "cat": "Name/Location", "hl": ["lacrimal"], "xl": "Lacrimal bones: medial wall of each orbit"}, {"q": "Which single facial bone forms the inferior and posterior part of the bony nasal septum?", "correct": "Vomer", "wrong": ["Mandible", "Lacrimal bone", "Sphenoid"], "note": "The ethmoid's perpendicular plate and cartilage complete the septum.", "region": "Skull", "cat": "Name/Location", "hl": ["vomer"], "xl": "Vomer: lower part of the nasal septum"}, {"q": "Which L-shaped paired facial bones form the back part of the hard palate?", "correct": "Palatine bones", "wrong": ["Nasal bones", "Zygomatic bones", "Vomer"], "note": "Horizontal plate = back of hard palate; perpendicular plate = nasal cavity wall.", "region": "Skull", "cat": "Name/Location", "hl": ["palatine"], "xl": "Palatine bones: back of the hard palate, hidden behind the maxillae"}, {"q": "Which three bones are the auditory ossicles in each middle ear?", "correct": "Malleus, incus, and stapes", "wrong": ["Malleus, stapes, and vomer", "Incus, hyoid, and stapes", "Malleus, incus, and lacrimal"], "note": "Hammer, anvil, stirrup: 3 per ear, 6 total.", "region": "Ossicles & Hyoid", "cat": "Name/Location", "hl": ["ossicles"], "xl": "Auditory ossicles, inside each middle ear"}, {"q": "Which U-shaped neck bone, suspended by muscles and ligaments, does not articulate directly with any other bone?", "correct": "Hyoid", "wrong": ["Mandible", "Manubrium", "Atlas"], "note": "Lies between the mandible and larynx; axial, but not one of the 22 skull bones.", "region": "Ossicles & Hyoid", "cat": "Name/Location", "hl": ["hyoid"], "xl": "Hyoid bone"}, {"q": "How many cervical vertebrae are in the neck?", "correct": "7", "wrong": ["5", "9", "12"], "note": "C1 through C7.", "region": "Vertebral Column", "cat": "Count", "hl": ["cervical"], "xl": "Cervical vertebrae C1-C7"}, {"q": "How many thoracic vertebrae are there?", "correct": "12", "wrong": ["7", "5", "10"], "note": "T1 through T12, each connects with ribs.", "region": "Vertebral Column", "cat": "Count", "hl": ["thoracic"], "xl": "Thoracic vertebrae T1-T12"}, {"q": "Which vertebra, C1, supports the skull and receives the occipital condyles (the 'yes' nod)?", "correct": "Atlas", "wrong": ["Axis", "Thoracic vertebra T1", "Sacrum"], "note": "Atlas = C1; axis = C2.", "region": "Vertebral Column", "cat": "Name/Location", "hl": ["atlas"], "xl": "Atlas (C1)"}, {"q": "Which vertebrae have costal facets for rib attachment?", "correct": "Thoracic vertebrae", "wrong": ["Cervical vertebrae", "Lumbar vertebrae", "Sacral vertebrae"], "note": "Rib articulation distinguishes thoracic from cervical and lumbar.", "region": "Vertebral Column", "cat": "Name/Location", "hl": ["thoracic"], "xl": "Thoracic vertebrae, where the ribs attach"}, {"q": "Which feature is a handy identifier of cervical vertebrae?", "correct": "Transverse foramina in the transverse processes", "wrong": ["Costal facets on the body", "Very massive, weight-bearing bodies", "A median sacral crest"], "note": "Vertebral arteries pass through them.", "region": "Vertebral Column", "cat": "Marking", "hl": ["cervical"], "xl": "Cervical vertebrae"}, {"q": "The sacrum usually forms from how many fused vertebrae?", "correct": "5", "wrong": ["3", "4", "7"], "note": "The coccyx commonly forms from 4 (range 3-5).", "region": "Vertebral Column", "cat": "Count", "hl": ["sacrum"], "xl": "Sacrum: 5 fused vertebrae"}, {"q": "Which part of a vertebra is the bony projection that points backward and can be felt down the middle of the back?", "correct": "Spinous process", "wrong": ["Transverse process", "Vertebral body", "Pedicle"], "note": "Transverse processes project laterally.", "region": "Vertebral Column", "cat": "Marking", "hl": ["spine"], "xl": "Vertebral column (spinous processes point backward)"}, {"q": "What does the vertebral canal, formed by the aligned vertebral foramina, protect?", "correct": "The spinal cord and associated nerve roots", "wrong": ["The brain", "The heart and lungs", "The kidneys"], "note": "", "region": "Vertebral Column", "cat": "Function", "hl": ["spine"], "xl": "Vertebral column: its canal holds the spinal cord"}, {"q": "Which three parts make up the sternum, from superior to inferior?", "correct": "Manubrium, body, xiphoid process", "wrong": ["Xiphoid process, body, manubrium", "Manubrium, costal margin, xiphoid process", "Jugular notch, body, manubrium"], "note": "", "region": "Thoracic Cage", "cat": "Name/Location", "hl": ["sternum"], "xl": "Sternum: manubrium, body, xiphoid process"}, {"q": "Which ribs are the true ribs, each with its own costal cartilage to the sternum?", "correct": "Pairs 1-7", "wrong": ["Pairs 8-10", "Pairs 11-12", "Pairs 1-10"], "note": "Pairs 8-12 are false ribs.", "region": "Thoracic Cage", "cat": "Name/Location", "hl": ["ribTrue"], "xl": "True ribs, pairs 1-7"}, {"q": "Which ribs are the floating ribs, with no anterior attachment to the sternum?", "correct": "Pairs 11-12", "wrong": ["Pairs 8-10", "Pairs 1-7", "Pairs 9-12"], "note": "Floating ribs are a subset of the false ribs (8-12). 12 pairs total.", "region": "Thoracic Cage", "cat": "Name/Location", "hl": ["ribFloat"], "xl": "Floating ribs, pairs 11-12"}, {"q": "Which two bones make up each side of the pectoral girdle?", "correct": "Clavicle and scapula", "wrong": ["Clavicle and humerus", "Scapula and sternum", "Scapula and humerus"], "note": "2 clavicles + 2 scapulae = 4 bones.", "region": "Pectoral Girdle", "cat": "Name/Location", "hl": ["clavicle", "scapula"], "xl": "Pectoral girdle: clavicle and scapula"}, {"q": "The scapula's glenoid cavity receives the head of which bone?", "correct": "Humerus", "wrong": ["Clavicle", "Radius", "Femur"], "note": "A shallow socket, so the shoulder is very mobile.", "region": "Pectoral Girdle", "cat": "Marking", "hl": ["humerus"], "xl": "Humerus: its head fits the glenoid cavity"}, {"q": "Which scapular process meets the clavicle at the AC (acromioclavicular) joint?", "correct": "Acromion", "wrong": ["Coracoid process", "Glenoid cavity", "Olecranon"], "note": "The coracoid projects forward; the acromion ends the scapular spine.", "region": "Pectoral Girdle", "cat": "Marking", "hl": ["scapula"], "xl": "Scapula: the acromion meets the clavicle"}, {"q": "Which bone is the single bone of the arm, between the shoulder and elbow?", "correct": "Humerus", "wrong": ["Radius", "Ulna", "Clavicle"], "note": "Forearm = radius + ulna.", "region": "Upper Limb", "cat": "Name/Location", "hl": ["humerus"], "xl": "Humerus"}, {"q": "The trochlea, capitulum, and medial and lateral epicondyles are on the distal end of which arm bone?", "correct": "Humerus", "wrong": ["Ulna", "Radius", "Scapula"], "note": "Trochlea meets the ulna; capitulum meets the radius.", "region": "Upper Limb", "cat": "Marking", "hl": ["humerus"], "xl": "Humerus: trochlea and capitulum at the elbow end"}, {"q": "In anatomical position, which forearm bone is on the thumb side?", "correct": "Radius", "wrong": ["Ulna", "Humerus", "Scaphoid"], "note": "Radius is lateral; ulna is medial.", "region": "Upper Limb", "cat": "Name/Location", "hl": ["radius"], "xl": "Radius, on the thumb side"}, {"q": "Which forearm bone has the olecranon, the point of the elbow?", "correct": "Ulna", "wrong": ["Radius", "Humerus", "Scapula"], "note": "Olecranon fits into the humerus's olecranon fossa.", "region": "Upper Limb", "cat": "Marking", "hl": ["ulna"], "xl": "Ulna: the olecranon is the point of the elbow"}, {"q": "How many carpal bones are in each wrist?", "correct": "8", "wrong": ["7", "5", "14"], "note": "2 rows of 4.", "region": "Upper Limb", "cat": "Count", "hl": ["carpals"], "xl": "Carpals: 8 per wrist"}, {"q": "Which of these is NOT a carpal bone?", "correct": "Talus", "wrong": ["Scaphoid", "Lunate", "Hamate"], "note": "Talus is a tarsal (ankle).", "region": "Upper Limb", "cat": "Name/Location", "hl": ["tarsals"], "xl": "The talus is a tarsal (ankle), not a carpal"}, {"q": "Which proximal-row carpal is on the thumb side, and is a commonly fractured carpal?", "correct": "Scaphoid", "wrong": ["Pisiform", "Triquetrum", "Hamate"], "note": "Proximal row, lateral to medial: scaphoid, lunate, triquetrum, pisiform.", "region": "Upper Limb", "cat": "Name/Location", "hl": ["scaphoid"], "xl": "Scaphoid"}, {"q": "How many metacarpals form the palm of each hand?", "correct": "5", "wrong": ["8", "14", "3"], "note": "Numbered 1-5 from thumb to little finger; their heads form the knuckles.", "region": "Upper Limb", "cat": "Count", "hl": ["metacarpals"], "xl": "Metacarpals: 5 per hand"}, {"q": "How many phalanges are in each hand?", "correct": "14", "wrong": ["5", "10", "8"], "note": "3 in each finger, 2 in the thumb.", "region": "Upper Limb", "cat": "Count", "hl": ["phalH"], "xl": "Phalanges: 14 per hand"}, {"q": "Which digit has only two phalanges (proximal and distal)?", "correct": "Thumb", "wrong": ["Index finger", "Middle finger", "Little finger"], "note": "Same pattern in the foot: the great toe has 2.", "region": "Upper Limb", "cat": "Name/Location", "hl": ["thumbphal"], "xl": "Thumb: 2 phalanges"}, {"q": "Which three bones fuse to form each hip (coxal) bone?", "correct": "Ilium, ischium, and pubis", "wrong": ["Ilium, sacrum, and pubis", "Ischium, femur, and pubis", "Ilium, ischium, and coccyx"], "note": "They meet in the acetabulum. 2 hip bones = 2 bones in the pelvic girdle.", "region": "Pelvic Girdle", "cat": "Name/Location", "hl": ["hip"], "xl": "Hip bone: ilium, ischium, pubis"}, {"q": "The acetabulum is the deep socket that receives the head of which bone?", "correct": "Femur", "wrong": ["Humerus", "Tibia", "Sacrum"], "note": "Deeper than the glenoid cavity, so the hip is more stable.", "region": "Pelvic Girdle", "cat": "Marking", "hl": ["femur", "acetabulum"], "xl": "Femur head in the acetabulum"}, {"q": "The ischial tuberosity supports your weight when you sit. Which part of the hip bone is it on?", "correct": "Ischium", "wrong": ["Ilium", "Pubis", "Sacrum"], "note": "Ischium = posteroinferior part of the hip bone.", "region": "Pelvic Girdle", "cat": "Marking", "hl": ["ischium"], "xl": "Ischium"}, {"q": "The two pubic bones meet at which fibrocartilage joint at the front of the pelvis?", "correct": "Pubic symphysis", "wrong": ["Sacroiliac joint", "Acetabulum", "Obturator foramen"], "note": "Hip bones meet the sacrum at the sacroiliac joints.", "region": "Pelvic Girdle", "cat": "Name/Location", "hl": ["symphysis", "pubis"], "xl": "Pubic symphysis"}, {"q": "Which bone is the longest and strongest bone in the body?", "correct": "Femur", "wrong": ["Tibia", "Humerus", "Fibula"], "note": "Single bone of the thigh.", "region": "Lower Limb", "cat": "Name/Location", "hl": ["femur"], "xl": "Femur"}, {"q": "The greater and lesser trochanters are found on which bone?", "correct": "Femur", "wrong": ["Tibia", "Humerus", "Ilium"], "note": "Large blunt projections for muscle attachment.", "region": "Lower Limb", "cat": "Marking", "hl": ["femur"], "xl": "Femur: trochanters at the top"}, {"q": "The patellar ligament attaches the patella to which marking on the tibia?", "correct": "Tibial tuberosity", "wrong": ["Medial malleolus", "Lateral malleolus", "Greater trochanter"], "note": "Patella is embedded in the quadriceps tendon.", "region": "Lower Limb", "cat": "Marking", "hl": ["tibia"], "xl": "Tibia: the tuberosity is just below the knee"}, {"q": "Which lower-leg bone is the larger, medial bone that carries most of the body's weight?", "correct": "Tibia", "wrong": ["Fibula", "Femur", "Patella"], "note": "Fibula is slender and lateral.", "region": "Lower Limb", "cat": "Name/Location", "hl": ["tibia"], "xl": "Tibia"}, {"q": "The lateral malleolus (outer ankle bump) is the distal end of which bone?", "correct": "Fibula", "wrong": ["Tibia", "Talus", "Calcaneus"], "note": "Medial malleolus = tibia.", "region": "Lower Limb", "cat": "Marking", "hl": ["fibula"], "xl": "Fibula: the lateral malleolus is its lower end"}, {"q": "How many tarsal bones are in each ankle and proximal foot?", "correct": "7", "wrong": ["8", "5", "14"], "note": "Talus, calcaneus, navicular, cuboid, 3 cuneiforms.", "region": "Lower Limb", "cat": "Count", "hl": ["tarsals"], "xl": "Tarsals: 7 per ankle"}, {"q": "Which tarsal forms the heel and anchors the calcaneal (Achilles) tendon?", "correct": "Calcaneus", "wrong": ["Talus", "Navicular", "Cuboid"], "note": "", "region": "Lower Limb", "cat": "Name/Location", "hl": ["tarsals"], "xl": "Tarsals: the calcaneus is the heel"}, {"q": "Which tarsal sits in the bracket formed by the tibia and fibula and receives weight from the tibia?", "correct": "Talus", "wrong": ["Calcaneus", "Cuboid", "Navicular"], "note": "", "region": "Lower Limb", "cat": "Name/Location", "hl": ["tarsals"], "xl": "Tarsals: the talus sits under the tibia"}, {"q": "How many metatarsals are in each foot?", "correct": "5", "wrong": ["7", "14", "3"], "note": "Numbered from the great-toe side.", "region": "Lower Limb", "cat": "Count", "hl": ["metatarsals"], "xl": "Metatarsals: 5 per foot"}, {"q": "How many phalanges are in each foot?", "correct": "14", "wrong": ["10", "7", "5"], "note": "3 in each of the 4 smaller toes, 2 in the great toe.", "region": "Lower Limb", "cat": "Count", "hl": ["phalF"], "xl": "Phalanges: 14 per foot"}, {"q": "Which pair of minerals does the skeleton store as a reservoir?", "correct": "Calcium and phosphate", "wrong": ["Iron and copper", "Sodium and chloride", "Potassium and magnesium"], "note": "Calcium is also needed for nerves, muscle contraction, and clotting.", "region": "Big Picture", "cat": "Function", "hl": ["all"], "xl": "The whole skeleton stores calcium and phosphate"}, {"q": "Where in the body are blood cells made (hematopoiesis)?", "correct": "Red bone marrow", "wrong": ["Yellow bone marrow", "Periosteum", "Articular cartilage"], "note": "Yellow marrow stores fat (energy).", "region": "Big Picture", "cat": "Function", "hl": ["hip", "sternum", "ribs", "spine"], "xl": "Adult red marrow sites: pelvis, vertebrae, ribs, sternum"}, {"q": "The rib cage surrounding the heart and lungs shows which skeletal function?", "correct": "Protection", "wrong": ["Support", "Mineral storage", "Blood cell formation"], "note": "Skull protects the brain; vertebrae protect the spinal cord.", "region": "Big Picture", "cat": "Function", "hl": ["ribs", "sternum"], "xl": "The rib cage protects the heart and lungs"}, {"q": "The femur and humerus are examples of which bone shape class?", "correct": "Long bones", "wrong": ["Short bones", "Flat bones", "Irregular bones"], "note": "Longer than wide, shaft plus two ends.", "region": "Big Picture", "cat": "Classification", "hl": ["femur", "humerus"], "xl": "Long bones: femur and humerus"}, {"q": "Carpals and most tarsals are roughly cube-shaped. Which class are they?", "correct": "Short bones", "wrong": ["Long bones", "Flat bones", "Sesamoid bones"], "note": "", "region": "Big Picture", "cat": "Classification", "hl": ["carpals", "tarsals"], "xl": "Short bones: carpals and tarsals"}, {"q": "The sternum, scapulae, ribs, and many skull bones belong to which class?", "correct": "Flat bones", "wrong": ["Long bones", "Short bones", "Irregular bones"], "note": "Thin, often curved.", "region": "Big Picture", "cat": "Classification", "hl": ["sternum", "scapula", "ribs", "cranium"], "xl": "Flat bones: sternum, scapulae, ribs, skull"}, {"q": "Vertebrae and some facial bones have complex shapes that fit none of the other classes. What class are they?", "correct": "Irregular bones", "wrong": ["Flat bones", "Short bones", "Sesamoid bones"], "note": "", "region": "Big Picture", "cat": "Classification", "hl": ["spine"], "xl": "Irregular bones: vertebrae"}, {"q": "Which type of bone develops within a tendon, like the patella?", "correct": "Sesamoid bone", "wrong": ["Long bone", "Flat bone", "Irregular bone"], "note": "The patella is the largest sesamoid bone.", "region": "Big Picture", "cat": "Classification", "hl": ["patella"], "xl": "Sesamoid bone: patella"}, {"q": "In bone markings, what is a foramen?", "correct": "A round or oval opening through a bone", "wrong": ["A shallow depression", "A narrow ridge", "A large blunt projection"], "note": "Examples: foramen magnum, vertebral foramen.", "region": "Big Picture", "cat": "Marking", "hl": ["occipital", "spine"], "xl": "Foramen examples: foramen magnum, vertebral foramina"}, {"q": "Compared with a typical male pelvis, the typical female pelvis is ___.", "correct": "Wider and shallower, with a larger inlet", "wrong": ["Narrower and deeper, with a smaller inlet", "Identical in every measurement", "Taller, with a more curved sacrum"], "note": "These are average patterns with plenty of overlap.", "region": "Big Picture", "cat": "Pelvis", "hl": ["hip", "sacrum", "coccyx"], "xl": "Bony pelvis: hip bones, sacrum, coccyx"}, {"q": "The pubic arch (angle below the pubic symphysis) is typically ___ in females than in males.", "correct": "Broader", "wrong": ["Narrower", "Longer", "More fused"], "note": "A roomier birth canal.", "region": "Big Picture", "cat": "Pelvis", "hl": ["pubis", "symphysis"], "xl": "Pubic arch, below the pubic symphysis"}, {"q": "Which sacrum description fits the typical female pelvis?", "correct": "Shorter and less curved", "wrong": ["Longer and more curved", "Fused to the femur", "Wider than the hip bones"], "note": "Also: ischial spines less prominent and farther apart.", "region": "Big Picture", "cat": "Pelvis", "hl": ["sacrum"], "xl": "Sacrum"}, {"q": "A softball hits a player's face and flattens her cheek. The X-ray shows a broken cheekbone. Which bone is fractured?", "correct": "Zygomatic bone", "wrong": ["Maxilla", "Mandible", "Nasal bone"], "note": "Zygomatic bones form the cheekbones.", "region": "Skull", "cat": "Application", "hl": ["zygomatic"], "xl": "Zygomatic bone (cheekbone)"}, {"q": "After a diving accident, a patient's injury involves the cervical vertebra with the upward dens (odontoid process) that lets the head turn side to side ('no'). Which vertebra is it?", "correct": "Axis (C2)", "wrong": ["Atlas (C1)", "C7", "T1"], "note": "The atlas rotates around the dens of the axis.", "region": "Vertebral Column", "cat": "Application", "hl": ["axis"], "xl": "Axis (C2)"}, {"q": "A weightlifter hurts the large, weight-bearing vertebrae of the lower back, which have no rib facets or transverse foramina. Which region is injured?", "correct": "Lumbar vertebrae", "wrong": ["Cervical vertebrae", "Thoracic vertebrae", "Sacral vertebrae"], "note": "Lumbar vertebrae: large bodies, short broad spinous processes.", "region": "Vertebral Column", "cat": "Application", "hl": ["lumbar"], "xl": "Lumbar vertebrae L1-L5"}, {"q": "During CPR, hands placed too low risk breaking the small inferior tip of the sternum. What is it called?", "correct": "Xiphoid process", "wrong": ["Manubrium", "Body of the sternum", "Sternal angle"], "note": "The xiphoid process is the smallest, most inferior part of the sternum.", "region": "Thoracic Cage", "cat": "Application", "hl": ["xiphoid"], "xl": "Xiphoid process"}, {"q": "A patient has a herniated ('slipped') disc pressing on a nerve. Which part of the intervertebral disc pushed through the tough outer ring?", "correct": "Nucleus pulposus", "wrong": ["Annulus fibrosus", "Vertebral foramen", "Spinous process"], "note": "Inner gelatinous nucleus pulposus pushes through the annulus fibrosus.", "region": "Vertebral Column", "cat": "Application", "hl": ["spine"], "xl": "Intervertebral discs sit between the vertebral bodies"}, {"q": "A girl falls on her shoulder and the S-shaped bone connecting the sternum to the scapula breaks. Which bone is fractured?", "correct": "Clavicle", "wrong": ["Scapula", "Humerus", "Manubrium"], "note": "Clavicle = collarbone; breaks after a fall on an outstretched hand or a blow to the shoulder.", "region": "Pectoral Girdle", "cat": "Application", "hl": ["clavicle"], "xl": "Clavicle"}, {"q": "A man falls on an outstretched hand. His wrist is tender at the base of the thumb, and the first X-ray looks clear. Which commonly fractured carpal is suspected?", "correct": "Scaphoid", "wrong": ["Pisiform", "Hamate", "Capitate"], "note": "Scaphoid fractures can be hard to see at first and risk delayed healing.", "region": "Upper Limb", "cat": "Application", "hl": ["scaphoid"], "xl": "Scaphoid"}, {"q": "After a fall, a patient's wrist has a 'dinner-fork' deformity from a Colles fracture. Which forearm bone is broken?", "correct": "Distal radius", "wrong": ["Distal ulna", "Humerus", "Scaphoid"], "note": "Colles = distal radius fracture with dorsal displacement.", "region": "Upper Limb", "cat": "Application", "hl": ["radiusD"], "xl": "Distal radius"}, {"q": "A skier's shin bone, the weight-bearing bone on the medial side of the lower leg, is fractured. Which bone?", "correct": "Tibia", "wrong": ["Fibula", "Femur", "Patella"], "note": "Tibia carries most of the load from the femur.", "region": "Lower Limb", "cat": "Application", "hl": ["tibia"], "xl": "Tibia"}, {"q": "An elderly patient with osteoporosis falls and is diagnosed with a 'hip fracture' at the neck of the long bone whose head fits into the acetabulum. Which bone?", "correct": "Femur", "wrong": ["Ilium", "Pubis", "Sacrum"], "note": "The femoral neck is a common fracture site when bone strength is reduced.", "region": "Lower Limb", "cat": "Application", "hl": ["femur"], "xl": "Femur: the neck sits just below the head"}];
+var MAP_SRC = "";
+
+function $(id){return document.getElementById(id);}
+function rand(n){return Math.floor(Math.random()*n);}
+function pick(a){return a[rand(a.length)];}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=rand(i+1);var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+function money(n){return "$"+Math.round(n).toLocaleString("en-US");}
+
+/* ================= people ================= */
+var FIRST=["Maya","Jake","Lena","Omar","Tess","Carlos","Abby","Dev","Nora","Eli","Rosa","Sam","Ivy","Marcus","Hana","Luke","Zoe","Andre","Priya","Ben","Gwen","Tariq","Joy","Cole","Mei","Hugo","Dana","Isaac","Kira","Walt","June","Reggie","Ada","Felix"];
+var LAST=["Ortiz","Bennett","Fischer","Haddad","Nguyen","Rivera","Stone","Patel","Kim","Brooks","Delgado","Whitaker","Chen","Reed","Sato","Dawson","Marsh","Lopez","Shah","Calloway","Alder","Nasser","Okafor","Ramsey","Lin","Barros","Pruitt","Moore","Voss","Jensen"];
+var SKIN=["#f3d3b8","#e8b88f","#d39c6e","#b97c4f","#8d5a36","#6b4226","#f1c7a4","#c68a5a"];
+var HAIRC=["#2b1d14","#4a3020","#7a4b25","#b07a3f","#d9b56b","#1b1b1b","#8c8c8c","#a2402a"];
+var SHIRT=["#3b7dd8","#d8572a","#2f9e6b","#8e5bd1","#e0a526","#c23b5a","#1f8fa3","#5b6b7a","#e86a92","#4a5ea8"];
+var PANTS=["#2c3e50","#3d4f63","#5a4636","#273a6b","#4b4b4b","#6a5a8c"];
+var HAIRS=["short","long","bun","curly","bald","short","long"];
+
+var GLOWREG={"Skull":"head","Ossicles & Hyoid":"headneck","Vertebral Column":"spine","Thoracic Cage":"chest","Pectoral Girdle":"shoulder","Upper Limb":"arm","Pelvic Girdle":"hip","Lower Limb":"leg","Big Picture":null};
+var COMPLAINT={
+  "head":["hit in the head","face pain after impact","jaw will not close right","headache after a fall"],
+  "headneck":["ringing in the ear","sore throat and neck pain","muffled hearing"],
+  "spine":["back pain","stiff neck","tingling down the leg","pain after lifting"],
+  "chest":["chest pain when breathing","sore ribs","pressure on the chest"],
+  "shoulder":["fell on the shoulder","cannot lift the arm","pain near the collarbone"],
+  "arm":["wrist pain","elbow swelling","sore hand","fell on an outstretched hand"],
+  "hip":["hip pain","pain when sitting","groin ache"],
+  "leg":["knee pain","twisted ankle","shin pain","sore foot"],
+  "none":["resident with a question","nurse needs a quick answer","med student on rounds"]
+};
+
+function glowShape(kind,s){
+  var g=' class="glow" fill="url(#erGlow)" stroke="#ff2020" stroke-width="1.6" stroke-dasharray="3 2"';
+  switch(kind){
+    case "head": return '<ellipse'+g+' cx="30" cy="16" rx="17" ry="17"/>';
+    case "headneck": return '<ellipse'+g+' cx="30" cy="21" rx="15" ry="20"/>';
+    case "spine": return '<ellipse'+g+' cx="30" cy="57" rx="8.5" ry="28"/>';
+    case "chest": return '<ellipse'+g+' cx="30" cy="50" rx="18" ry="14"/>';
+    case "hip": return '<ellipse'+g+' cx="30" cy="80" rx="20" ry="10"/>';
+    case "shoulder": return '<ellipse'+g+' cx="'+(30+s*15)+'" cy="39" rx="11" ry="11"/>';
+    case "arm": return '<ellipse'+g+' cx="'+(30+s*17)+'" cy="61" rx="9" ry="28"/>';
+    case "leg": return '<ellipse'+g+' cx="'+(30+s*6.5)+'" cy="103" rx="10" ry="29"/>';
+  }
+  return "";
+}
+function figSVG(p){
+  var L=p.look, k=p.glow, s=p.side, o='';
+  o+='<svg class="fig" viewBox="-4 -14 68 156" aria-hidden="true">';
+  o+='<ellipse cx="30" cy="133" rx="17" ry="3.5" fill="rgba(0,0,0,.18)"/>';
+  ["L","R"].forEach(function(side){
+    var sx=side==="L"?-1:1, xt=30+sx*6.5, xb=30+sx*7.5;
+    o+='<g class="leg'+side+'"><line x1="'+xt+'" y1="78" x2="'+xb+'" y2="126" stroke="'+L.pants+'" stroke-width="10" stroke-linecap="round"/>'+
+       '<ellipse cx="'+(xb+sx*1.5)+'" cy="130" rx="6.5" ry="3.3" fill="#2a2a2a"/>'+(k==="leg"&&s===sx?glowShape("leg",sx):"")+'</g>';
+  });
+  var shirt=p.consult?"#f4f7f9":L.shirt;
+  o+='<path d="M15,36 Q30,30 45,36 L47,81 Q30,85 13,81 Z" fill="'+shirt+'"'+(p.consult?' stroke="#c9d4da" stroke-width="1"':'')+'/>';
+  if(p.consult){
+    o+='<path d="M27,35 L30,52 L33,35 Z" fill="'+L.shirt+'"/>';
+    o+='<path d="M23,36 Q20,52 27,58 Q31,60 33,56" fill="none" stroke="#2a3a44" stroke-width="1.6"/><circle cx="33.5" cy="56" r="2" fill="#2a3a44"/>';
+  }
+  if(p.trauma){o+='<circle cx="38" cy="47" r="5" fill="#fff"/><path d="M38,43.6 V50.4 M34.6,47 H41.4" stroke="#d93a32" stroke-width="2.4"/>';}
+  o+='<rect x="27" y="25" width="6" height="10" fill="'+L.skin+'"/>';
+  o+='<circle cx="30" cy="17" r="11" fill="'+L.skin+'"/>';
+  var h=L.hairColor;
+  if(L.hair==="short"||L.hair==="bun") o+='<path d="M18.6,17 C18,3 42,3 41.4,17 C38,10 22,10 18.6,17 Z" fill="'+h+'"/>';
+  if(L.hair==="bun") o+='<circle cx="30" cy="4" r="5" fill="'+h+'"/>';
+  if(L.hair==="long") o+='<path d="M18.5,19 C16.5,2 43.5,2 41.5,19 L42.5,32 L37.5,32 L37.5,13 C34,9.5 26,9.5 22.5,13 L22.5,32 L17.5,32 Z" fill="'+h+'"/>';
+  if(L.hair==="curly") o+='<g fill="'+h+'"><circle cx="21" cy="11" r="4.5"/><circle cx="26" cy="6.5" r="4.5"/><circle cx="32" cy="5.5" r="4.5"/><circle cx="37.5" cy="8" r="4.5"/><circle cx="40" cy="13" r="3.8"/><circle cx="20" cy="15" r="3.2"/></g>';
+  o+='<circle cx="26" cy="17" r="1.3" fill="#1b2a33"/><circle cx="34" cy="17" r="1.3" fill="#1b2a33"/>';
+  var ms=' fill="none" stroke="#1b2a33" stroke-width="1.3" stroke-linecap="round"';
+  o+='<path class="m m-ok" d="M26.8,22.6 Q30,23.6 33.2,22.6"'+ms+'/>';
+  o+='<path class="m m-worry" d="M26.8,24 Q30,21.6 33.2,24"'+ms+'/>';
+  o+='<ellipse class="m m-pain" cx="30" cy="23.5" rx="2.3" ry="1.9" fill="#1b2a33"/>';
+  o+='<path class="m m-happy" d="M26,21.4 Q30,26.2 34,21.4"'+ms+'/>';
+  ["L","R"].forEach(function(side){
+    var sx=side==="L"?-1:1, sl=p.consult?"#f4f7f9":L.shirt;
+    o+='<g class="arm'+side+'"><line x1="'+(30+sx*15)+'" y1="39" x2="'+(30+sx*17)+'" y2="58" stroke="'+sl+'" stroke-width="8" stroke-linecap="round"/>'+
+       '<line x1="'+(30+sx*17)+'" y1="58" x2="'+(30+sx*19)+'" y2="80" stroke="'+L.skin+'" stroke-width="6" stroke-linecap="round"/>'+
+       '<circle cx="'+(30+sx*19)+'" cy="83" r="3.6" fill="'+L.skin+'"/>';
+    if(p.consult&&sx===1) o+='<rect x="44" y="70" width="11" height="14" rx="1.5" fill="#c9a06a"/><rect x="45.5" y="72.5" width="8" height="10" fill="#fbfbf7"/>';
+    if(k==="arm"&&s===sx) o+=glowShape("arm",sx);
+    o+='</g>';
+  });
+  if(k&&k!=="arm"&&k!=="leg") o+=glowShape(k,s);
+  o+='</svg>';
+  return o;
+}
+function newLook(){return {skin:pick(SKIN),hair:pick(HAIRS),hairColor:pick(HAIRC),shirt:pick(SHIRT),pants:pick(PANTS)};}
+function glowText(p){
+  if(!p.glow) return null;
+  var side=p.side===-1?"right ":"left "; // figure faces the viewer
+  var t={head:"head",headneck:"head and neck",spine:"back",chest:"chest",hip:"hip",shoulder:side+"shoulder",arm:side+"arm",leg:side+"leg"};
+  return t[p.glow];
+}
+
+/* ================= X-ray drawings ================= */
+var FULL_SVG=(function(){
+  var o='<svg class="xr" viewBox="0 0 200 444" role="img" aria-label="X-ray of the full skeleton">';
+  function sides(fn){o+=fn(-1)+fn(1);}
+  function X(s,d){return (100+s*d).toFixed(1);}
+  function ln(c,x1,y1,x2,y2,w){return '<line class="s p-'+c+'" x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke-width="'+w+'"/>';}
+  // scapulae behind ribs
+  sides(function(s){return '<polygon class="b p-scapula" points="'+X(s,30)+',104 '+X(s,48)+',106 '+X(s,36)+',148"/>';});
+  // skull
+  o+='<ellipse class="b p-cranium" cx="100" cy="38" rx="24" ry="27"/>';
+  o+='<path class="b p-face" d="M80,52 L120,52 L116,70 L84,70 Z"/>';
+  o+='<path class="b p-mandible" d="M84,71 L116,71 L112,83 L88,83 Z"/>';
+  o+='<ellipse class="hole" cx="91" cy="52" rx="6" ry="5"/><ellipse class="hole" cx="109" cy="52" rx="6" ry="5"/><path class="hole" d="M100,58 L96.5,66 L103.5,66 Z"/>';
+  o+='<circle class="b p-ossicles" cx="75" cy="47" r="2.4"/><circle class="b p-ossicles" cx="125" cy="47" r="2.4"/>';
+  o+='<path class="s p-hyoid" d="M93.5,89 Q100,95 106.5,89" stroke-width="2.4"/>';
+  // spine
+  var y=86,i;
+  for(i=0;i<7;i++){o+='<rect class="b p-cervical'+(i===0?" p-atlas":i===1?" p-axis":"")+'" x="96" y="'+(y+i*3.6).toFixed(1)+'" width="8" height="3" rx="1"/>';}
+  for(i=0;i<12;i++){o+='<rect class="b p-thoracic" x="94.5" y="'+(111.5+i*5.4).toFixed(1)+'" width="11" height="4.6" rx="1"/>';}
+  for(i=0;i<5;i++){o+='<rect class="b p-lumbar" x="93" y="'+(176.5+i*6.6).toFixed(1)+'" width="14" height="5.8" rx="1.2"/>';}
+  o+='<polygon class="b p-sacrum" points="92,210 108,210 104,232 96,232"/><polygon class="b p-coccyx" points="97.5,233 102.5,233 100,242"/>';
+  // ribs
+  var reach=[22,29,34,37,39,40,40,39,37,34,26,21];
+  for(i=1;i<=12;i++){
+    var y0=113+(i-1)*5.3, r=reach[i-1], cls=i<=7?"ribTrue":(i<=10?"ribFalse":"ribFloat");
+    (function(i,y0,r,cls){sides(function(s){
+      var end;
+      if(i<=7) end=X(s,5)+','+(117+(i-1)*6.4).toFixed(1);
+      else if(i<=10) end=X(s,8+(i-8)*6)+','+(167+(i-8)*4).toFixed(1);
+      else end=X(s,r*0.85)+','+(y0+12).toFixed(1);
+      return '<path class="s p-'+cls+'" stroke-width="2.4" d="M'+X(s,6)+','+y0.toFixed(1)+' C'+X(s,r)+','+(y0-3).toFixed(1)+' '+X(s,r)+','+(y0+(i>10?6:22)).toFixed(1)+' '+end+'"/>';
+    });})(i,y0,r,cls);
+  }
+  // sternum
+  o+='<rect class="b p-manubrium" x="94" y="112" width="12" height="11" rx="2"/><rect class="b p-sternumBody" x="95.5" y="123.5" width="9" height="35.5" rx="2"/><polygon class="b p-xiphoid" points="96.5,159.5 103.5,159.5 100,167"/>';
+  // pectoral girdle + arms
+  sides(function(s){return '<path class="s p-clavicle" stroke-width="3.4" d="M'+X(s,6)+',111 C'+X(s,16)+',104 '+X(s,26)+',112 '+X(s,40)+',104"/>';});
+  sides(function(s){return '<circle class="b p-humerus" cx="'+X(s,46)+'" cy="110" r="5.5"/>'+ln("humerus",X(s,47),112,X(s,53),178,7);});
+  sides(function(s){return ln("radius",X(s,59),184,X(s,63),236,4)+ln("ulna",X(s,50),184,X(s,53),236,4);});
+  sides(function(s){return '<rect class="b p-carpals" x="'+(100+s*57-8).toFixed(1)+'" y="238" width="16" height="10" rx="2"/>';});
+  sides(function(s){var t="",k;for(k=0;k<5;k++){var dx=50.5+k*3.2;t+=ln("metacarpals",X(s,dx),250,X(s,dx-0.5+k*.3),262,1.8);
+    t+=ln("phalH"+(k===4?" p-thumbphal":""),X(s,dx-0.5+k*.3),264.5,X(s,dx-0.8+k*.6),k===4?272:278,1.6);}return t;});
+  // pelvic girdle
+  sides(function(s){return '<polygon class="b p-ilium" points="'+X(s,10)+',206 '+X(s,44)+',198 '+X(s,42)+',222 '+X(s,30)+',232 '+X(s,12)+',228"/>'+
+    '<polygon class="b p-ischium" points="'+X(s,23)+',244 '+X(s,37)+',247 '+X(s,31)+',263 '+X(s,21)+',259"/>'+
+    '<polygon class="b p-pubis" points="'+X(s,3)+',242 '+X(s,24)+',236 '+X(s,22)+',250 '+X(s,3)+',252"/>';});
+  o+=ln("symphysis",100,241,100,253,3);
+  // legs
+  sides(function(s){return '<circle class="b p-femur" cx="'+X(s,31)+'" cy="239" r="5"/><circle class="b p-femur" cx="'+X(s,38)+'" cy="247" r="3.5"/>'+ln("femur",X(s,31),243,X(s,23),330,8)+
+    '<circle class="s p-acetabulum" cx="'+X(s,31)+'" cy="239" r="7" stroke-width="2"/>';});
+  sides(function(s){return '<circle class="b p-patella" cx="'+X(s,23)+'" cy="338" r="5.5"/>'+ln("tibia",X(s,21),347,X(s,20),404,6.5)+ln("fibula",X(s,30),349,X(s,30),402,3);});
+  sides(function(s){var t='<rect class="b p-tarsals" x="'+(100+s*25-9).toFixed(1)+'" y="405" width="18" height="10" rx="2"/>',k;
+    for(k=0;k<5;k++){var dx=17.5+k*3.6;t+=ln("metatarsals",X(s,dx),417,X(s,dx),428,2)+ln("phalF",X(s,dx),431,X(s,dx),k===0?436:438,1.7);}return t;});
+  o+='</svg>';
+  return o;
+})();
+
+var SKULL_SVG=(function(){
+  var o='<svg class="xr z zoom" viewBox="0 0 200 236" role="img" aria-label="X-ray close-up of the skull, front view">';
+  var M='<g transform="translate(200,0) scale(-1,1)">';
+  function both(d,c){return '<path class="b s-'+c+'" d="'+d+'"/>'+M+'<path class="b s-'+c+'" d="'+d+'"/></g>';}
+  o+=both("M46,140 L54,142 L60,186 L100,186 L100,222 C70,222 56,212 48,192 Z","mandible");
+  o+=both("M28,98 C14,48 56,8 100,6 L100,10 C68,14 42,44 40,84 Z","parietal");
+  o+='<path class="b s-frontal" d="M40,84 C42,44 68,14 100,10 C132,14 158,44 160,84 L150,92 C134,86 116,88 100,96 C84,88 66,86 50,92 Z"/>';
+  o+=both("M28,98 L40,84 L50,92 L46,114 L44,142 L30,134 Z","temporal");
+  o+=both("M50,92 L46,114 L56,112 L58,97 Z","sphenoid");
+  o+=both("M44,142 L46,116 L58,126 L72,130 L66,148 L50,150 Z","zygomatic");
+  o+='<path class="b s-maxilla" d="M60,152 L66,148 L72,130 L92,124 L108,124 L128,130 L134,148 L140,152 L134,176 L66,176 Z"/>';
+  var t="",k;for(k=0;k<8;k++){t+='<rect class="b" x="'+(70+k*7.6)+'" y="177" width="6.2" height="7" rx="1.5"/><rect class="b" x="'+(70+k*7.6)+'" y="188" width="6.2" height="7" rx="1.5"/>';}
+  o+=t;
+  o+='<ellipse class="hole" cx="73" cy="110" rx="19" ry="16"/><ellipse class="hole" cx="127" cy="110" rx="19" ry="16"/>';
+  o+='<rect class="b s-sphenoid" x="62" y="100" width="7" height="14" rx="2"/><rect class="b s-sphenoid" x="131" y="100" width="7" height="14" rx="2"/>';
+  o+='<rect class="b s-ethmoid" x="83" y="100" width="4.5" height="13" rx="1.5"/><rect class="b s-ethmoid" x="112.5" y="100" width="4.5" height="13" rx="1.5"/>';
+  o+='<ellipse class="b s-lacrimal" cx="88.5" cy="117" rx="2.6" ry="4.2"/><ellipse class="b s-lacrimal" cx="111.5" cy="117" rx="2.6" ry="4.2"/>';
+  o+='<path class="hole" d="M100,122 C88,130 86,152 92,160 L108,160 C114,152 112,130 100,122 Z"/>';
+  o+='<polygon class="b s-nasal" points="95,98 105,98 108,124 92,124"/>';
+  o+='<rect class="b s-ethmoid" x="98.6" y="124" width="2.8" height="15" rx="1"/><rect class="b s-vomer" x="98.6" y="140" width="2.8" height="19" rx="1"/>';
+  o+='<ellipse class="b s-concha" cx="91.5" cy="151" rx="2.6" ry="5"/><ellipse class="b s-concha" cx="108.5" cy="151" rx="2.6" ry="5"/>';
+  o+='<text class="lab" x="100" y="232" text-anchor="middle">Skull, front view</text>';
+  o+='</svg>';
+  return o;
+})();
+
+var HAND_SVG=(function(){
+  var o='<svg class="xr z zoom" viewBox="0 0 160 236" role="img" aria-label="X-ray close-up of the hand and wrist, palm view">';
+  o+='<rect class="b h-radius" x="22" y="172" width="54" height="52" rx="8"/><rect class="b h-ulna" x="84" y="176" width="30" height="48" rx="8"/>';
+  o+='<ellipse class="b h-scaphoid" cx="38" cy="160" rx="13" ry="8.5"/><ellipse class="b h-lunate" cx="62" cy="161" rx="10" ry="8.5"/><ellipse class="b h-triquetrum" cx="84" cy="159" rx="10" ry="8"/><circle class="b h-pisiform" cx="104" cy="156" r="6"/>';
+  o+='<ellipse class="b h-trapezium" cx="29" cy="138" rx="10" ry="8.5"/><ellipse class="b h-trapezoid" cx="48" cy="136" rx="8" ry="8.5"/><ellipse class="b h-capitate" cx="68" cy="136" rx="10" ry="10"/><ellipse class="b h-hamate" cx="90" cy="136" rx="11" ry="9.5"/>';
+  function ln(c,x1,y1,x2,y2,w){return '<line class="s '+c+'" x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke-width="'+w+'"/>';}
+  o+=ln("h-metacarpals",26,126,14,98,8)+ln("h-metacarpals",50,124,48,76,7)+ln("h-metacarpals",69,122,69,72,7)+ln("h-metacarpals",89,124,91,76,7)+ln("h-metacarpals",104,128,111,86,7);
+  o+=ln("h-phalH h-thumbphal",12,92,7,72,7)+ln("h-phalH h-thumbphal",6,67,3,52,6.5);
+  [[48,70,46,50,45,34,44,22],[69,66,69,44,69,28,69,16],[91,70,93,50,94,34,95,22],[112,80,116,64,118,52,120,42]].forEach(function(f){
+    o+=ln("h-phalH",f[0],f[1],f[2],f[3],6.5)+ln("h-phalH",f[2],f[3]-4,f[4],f[5],6)+ln("h-phalH",f[4],f[5]-4,f[6],f[7],5.5);
+  });
+  o+='<text class="lab" x="8" y="234">Thumb side</text><text class="lab" x="152" y="234" text-anchor="end">Pinky side</text>';
+  o+='</svg>';
+  return o;
+})();
+
+var GROUPS={
+  skullAll:["frontal","parietal","temporal","occipital","sphenoid","ethmoid","maxilla","zygomatic","nasal","lacrimal","palatine","vomer","concha","mandible"],
+  cranial:["frontal","parietal","temporal","occipital","sphenoid","ethmoid"],
+  spine:["cervical","thoracic","lumbar","sacrum","coccyx"],
+  ribs:["ribTrue","ribFalse","ribFloat"],
+  sternum:["manubrium","sternumBody","xiphoid"],
+  hip:["ilium","ischium","pubis","acetabulum"],
+  all:["cranium","face","mandible","ossicles","hyoid","cervical","thoracic","lumbar","sacrum","coccyx","ribTrue","ribFalse","ribFloat","manubrium","sternumBody","xiphoid","clavicle","scapula","humerus","radius","ulna","carpals","metacarpals","phalH","ilium","ischium","pubis","symphysis","femur","patella","tibia","fibula","tarsals","metatarsals","phalF"]
+};
+var SKULLKEYS={frontal:1,parietal:1,temporal:1,occipital:1,sphenoid:1,ethmoid:1,maxilla:1,zygomatic:1,nasal:1,lacrimal:1,palatine:1,vomer:1,concha:1,mandible:1};
+var FACIAL={maxilla:1,zygomatic:1,nasal:1,lacrimal:1,palatine:1,vomer:1,concha:1};
+var CARPALS=["scaphoid","lunate","triquetrum","pisiform","trapezium","trapezoid","capitate","hamate"];
+var HANDMAP={carpals:CARPALS,metacarpals:["metacarpals"],phalH:["phalH"],thumbphal:["thumbphal"],radiusD:["radius"]};
+CARPALS.forEach(function(c){HANDMAP[c]=[c];});
+function fullFor(k){
+  if(SKULLKEYS[k]) return k==="mandible"?["mandible"]:(FACIAL[k]?["face"]:["cranium"]);
+  if(CARPALS.indexOf(k)>=0) return ["carpals"];
+  if(k==="thumbphal") return ["phalH"];
+  if(k==="radiusD") return ["radius"];
+  return [k];
+}
+function xrayHTML(q){
+  var keys=[];
+  q.hl.forEach(function(k){(GROUPS[k]||[k]).forEach(function(x){keys.push(x);});});
+  var full={},sk={},hd={},showSkull=false,showHand=false;
+  keys.forEach(function(k){
+    fullFor(k).forEach(function(f){full[f]=1;});
+    if(SKULLKEYS[k]){sk[k]=1;showSkull=true;}
+    if(HANDMAP[k]){HANDMAP[k].forEach(function(h){hd[h]=1;});showHand=true;}
+  });
+  var html='<div class="xray"><div class="xr-imgs">'+FULL_SVG+(showSkull?SKULL_SVG:"")+(showHand?HAND_SVG:"")+'</div><p class="xr-cap"><b>X-ray</b>'+esc(q.xl)+'</p></div>';
+  return {html:html,full:full,sk:sk,hd:hd};
+}
+function applyXray(root,x){
+  Object.keys(x.full).forEach(function(k){root.querySelectorAll(".p-"+k).forEach(function(e){e.classList.add("hit");});});
+  Object.keys(x.sk).forEach(function(k){root.querySelectorAll(".s-"+k).forEach(function(e){e.classList.add("hit");});});
+  Object.keys(x.hd).forEach(function(k){root.querySelectorAll(".h-"+k).forEach(function(e){e.classList.add("hit");});});
+}
+
+/* ================= sound ================= */
+var AC=null, muted=lsGet("erRushMute")==="1";
+function beep(f,d,type,v,delay){
+  if(muted) return;
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==="suspended") AC.resume();
+    var t=AC.currentTime+(delay||0), o=AC.createOscillator(), g=AC.createGain();
+    o.type=type||"sine"; o.frequency.value=f;
+    g.gain.setValueAtTime(v||0.05,t); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+d+0.02);
+  }catch(e){}
+}
+function sfx(k){
+  if(k==="ok"){beep(660,.12,"sine",.06);beep(880,.18,"sine",.06,.1);}
+  else if(k==="bad"){beep(150,.3,"sawtooth",.05);}
+  else if(k==="lost"){beep(220,.2,"square",.04);beep(165,.3,"square",.04,.18);}
+  else if(k==="arrive"){beep(420,.07,"triangle",.035);beep(560,.09,"triangle",.035,.08);}
+  else if(k==="level"){beep(523,.12,"triangle",.05);beep(659,.12,"triangle",.05,.12);beep(784,.22,"triangle",.05,.24);}
+  else if(k==="power"){beep(740,.1,"sine",.05);beep(988,.16,"sine",.05,.09);}
+}
+
+/* ================= state ================= */
+var S=null;
+function cap(){return Math.min(6,2+S.level);}
+function interval(){return Math.max(3.2,8-0.55*(S.level-1));}
+function patienceFor(trauma){var b=Math.max(17,34-1.6*(S.level-1));return trauma?b*0.85:b;}
+function tone(p){var f=p.t/p.max;return f>0.5?"g":(f>0.25?"a":"r");}
+function cur(){if(!S||S.sel==null)return null;for(var i=0;i<S.patients.length;i++)if(S.patients[i].id===S.sel)return S.patients[i];return null;}
+function mostUrgent(){var b=null;S.patients.forEach(function(p){if(!b||p.t<b.t)b=p;});return b;}
+function toast(msg,kind){
+  var el=document.createElement("div"); el.className="toast"+(kind?" "+kind:""); el.textContent=msg;
+  var box=$("toasts"); box.appendChild(el);
+  while(box.children.length>3) box.removeChild(box.firstChild);
+  setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},2400);
+}
+function show(id){["title","game","over"].forEach(function(s){$(s).hidden=(s!==id);});window.scrollTo(0,0);}
+
+function newGame(){
+  S={running:true,paused:false,feedback:false,fb:null,cash:0,streak:0,best:0,hearts:5,correct:0,wrong:0,left:0,level:1,
+     patients:[],sel:null,spawn:0.4,coffee:0,pu50:1,puCof:1,nextId:1,missed:[],decks:{n:[],t:[]},raf:0,last:performance.now()};
+}
+function nextQ(trauma){
+  var key=trauma?"t":"n";
+  if(!S.decks[key].length){
+    var idx=[];for(var i=0;i<BANK.length;i++){if((BANK[i].cat==="Application")===trauma)idx.push(i);}
+    S.decks[key]=shuffle(idx);
+  }
+  var q=S.decks[key].pop();
+  if(S.patients.some(function(p){return p.qi===q;}) && S.decks[key].length){var alt=S.decks[key].pop();S.decks[key].unshift(q);q=alt;}
+  return q;
+}
+
+/* ================= scene layout ================= */
+function geo(){
+  var sc=$("scene"), cs=getComputedStyle(sc), W=sc.clientWidth;
+  var dw=parseFloat(cs.getPropertyValue("--doorw"))||86, ew=parseFloat(cs.getPropertyValue("--exitw"))||56;
+  var left=dw+6, right=W-ew, sp=(right-left)/6;
+  return {W:W,door:dw/2,right:right,sp:sp};
+}
+function slotX(i,g){return g.right-g.sp*(i+0.5);}
+function renderSpots(){
+  var g=geo(), c=cap(), h="";
+  $("scene").style.setProperty("--sp",g.sp+"px");
+  for(var i=0;i<6;i++){
+    h+='<div class="spot'+(i<c?"":" locked")+'" style="left:'+slotX(i,g).toFixed(1)+'px">'+(i<c?"":'<small>Shift '+(i-1)+'</small>')+'</div>';
+  }
+  $("spots").innerHTML=h;
+}
+function setX(p,x,instant){
+  var el=p.el; if(!el) return;
+  var dx=Math.abs(x-(p.x==null?x:p.x)), g=geo();
+  var dur=instant?0:Math.max(.3,Math.min(2.4,dx/(Math.max(g.W,360)/3.6)));
+  el.style.transitionDuration=dur+"s";
+  el.style.transform="translateX("+x.toFixed(1)+"px)";
+  p.x=x;
+  if(dur>0&&dx>2){
+    el.classList.add("walking"); clearTimeout(p.walkT);
+    p.walkT=setTimeout(function(){el.classList.remove("walking");},dur*1000);
+  }
+}
+function layoutLine(instant){
+  var g=geo();
+  S.patients.forEach(function(p,i){var x=slotX(i,g);if(instant||Math.abs((p.x||0)-x)>1)setX(p,x,instant);});
+}
+function makeEl(p){
+  var el=document.createElement("button");
+  el.type="button"; el.className="ppl entering tone-g"+(p.trauma?" trauma":"");
+  el.setAttribute("aria-label",p.name+", "+p.complaint+(p.glow?", pain in the "+glowText(p):", consult"));
+  el.innerHTML='<span class="pbar"><i></i></span>'+figSVG(p)+'<span class="pname">'+esc(p.name.split(" ")[0])+'</span>';
+  el.addEventListener("click",function(){if(S&&S.running)select(p.id);});
+  p.el=el; p.bar=el.querySelector(".pbar i");
+  $("line").appendChild(el);
+}
+function walkOut(p,dir,mood,bubble){
+  var el=p.el; if(!el) return;
+  el.classList.add("leaving"); el.classList.remove("sel","tone-g","tone-a","tone-r");
+  el.classList.add(mood==="happy"?"mood-happy":"mood-sad","tone-g");
+  if(bubble){var b=document.createElement("span");b.className="bubble "+(mood==="happy"?"good":"bad");b.textContent=bubble;el.appendChild(b);}
+  var g=geo(), target=dir>0?g.W+60:g.door;
+  setTimeout(function(){
+    setX(p,target,false);
+    var dur=parseFloat(el.style.transitionDuration)||1;
+    setTimeout(function(){el.classList.add("gone");},Math.max(0,dur*1000-250));
+    setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},dur*1000+300);
+  },350);
+}
+
+/* ================= spawning ================= */
+function spawnPatient(){
+  var trauma=Math.random()<Math.min(0.28,0.12+0.02*S.level);
+  var qi=nextQ(trauma), q=BANK[qi], glow=GLOWREG[q.region];
+  var p={id:S.nextId++,qi:qi,trauma:q.cat==="Application",consult:!glow,glow:glow||null,side:Math.random()<.5?-1:1,
+         name:pick(FIRST)+" "+pick(LAST),age:14+rand(66),look:newLook(),
+         opts:shuffle([q.correct].concat(q.wrong)),hidden:[],x:null};
+  if(p.consult){p.name="Dr. "+pick(LAST);p.look.hair=pick(["short","bun","bald","curly"]);}
+  p.complaint=pick(COMPLAINT[p.glow||"none"]);
+  p.max=patienceFor(p.trauma); p.t=p.max;
+  S.patients.push(p);
+  makeEl(p);
+  var g=geo();
+  setX(p,g.door,true);
+  requestAnimationFrame(function(){requestAnimationFrame(function(){
+    if(!p.el) return; p.el.classList.remove("entering"); layoutLine(false);
+  });});
+  sfx("arrive");
+  if(S.sel==null&&!S.feedback){S.sel=p.id;renderChart();}
+  markSel(); renderHud();
+}
+
+/* ================= HUD + chart ================= */
+function heart(on){return '<svg viewBox="0 0 24 24" aria-hidden="true" class="'+(on?"":"off")+'"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';}
+function renderHud(){
+  $("hCash").textContent=money(S.cash);
+  $("hStreak").textContent=S.streak;
+  $("hShift").textContent=S.level;
+  var h="";for(var i=0;i<5;i++)h+=heart(i<S.hearts);
+  $("hHearts").innerHTML=h; $("hHearts").setAttribute("aria-label","Reputation: "+S.hearts+" of 5 hearts");
+  $("n50").textContent=S.pu50; $("nCof").textContent=S.puCof;
+  var p=cur();
+  $("pu50").disabled=!(S.pu50>0&&p&&!S.feedback&&p.hidden.length===0&&!S.paused);
+  $("puCof").disabled=!(S.puCof>0&&S.coffee<=0&&!S.feedback&&!S.paused&&S.patients.length>0);
+  $("cofLbl").textContent=S.coffee>0?("Frozen "+Math.ceil(S.coffee)+"s"):"Coffee break";
+  $("lineCount").textContent=S.patients.length+" of "+cap()+" spots";
+  $("freeze").hidden=!(S.coffee>0);
+}
+function markSel(){S.patients.forEach(function(p){if(p.el)p.el.classList.toggle("sel",p.id===S.sel);});}
+function examHTML(p){
+  var gt=glowText(p);
+  return '<div class="exam tone-'+tone(p)+'" id="exam">'+figSVG(p)+'<div class="hurt">'+
+    (gt?'<b class="pain">Pain: '+esc(gt)+'</b><span>The glow shows the hurt area. Name the bone.</span>':'<b>Consult</b><span>No injury. A colleague needs an answer.</span>')+'</div></div>';
+}
+function renderChart(){
+  var el=$("chart"),p=cur();
+  if(!p){el.innerHTML='<div class="idle"><b>Line is empty</b>The next patient walks in soon.</div>';return;}
+  var q=BANK[p.qi];
+  var h='<div class="visual" id="visual">'+examHTML(p)+'</div><div class="qa"><div class="ch-head"><div><div class="ch-name">'+esc(p.name)+(p.consult?"":", "+p.age)+'</div><div class="ch-cx">'+esc(p.complaint)+'</div></div>'+
+    '<div class="ch-pay'+(p.trauma?" trauma":"")+'">'+(p.trauma?"Trauma<br>pays 3x":(p.consult?"Consult<br>$100":"Standard<br>$100"))+'</div></div>'+
+    '<p class="q">'+esc(q.q)+'</p><div class="opts">';
+  p.opts.forEach(function(o,i){
+    var gone=p.hidden.indexOf(i)>=0;
+    h+='<button type="button" class="opt'+(gone?" gone":"")+'" data-i="'+i+'"'+(gone?" disabled":"")+'><span class="k">'+(i+1)+'</span><span>'+esc(o)+'</span></button>';
+  });
+  h+='</div><div id="fb"></div></div>';
+  el.innerHTML=h;
+}
+
+/* ================= actions ================= */
+function select(id){
+  if(S.feedback||S.paused) return;
+  S.sel=id; markSel(); renderChart(); renderHud();
+  var c=$("chart"),r=c.getBoundingClientRect();
+  if(r.top>window.innerHeight*0.85){c.scrollIntoView({block:"nearest",behavior:"smooth"});}
+}
+function autoSelect(){var u=mostUrgent();S.sel=u?u.id:null;markSel();renderChart();renderHud();}
+function answer(i){
+  if(!S||!S.running||S.feedback||S.paused) return;
+  var p=cur(); if(!p||p.hidden.indexOf(i)>=0) return;
+  var q=BANK[p.qi], choice=p.opts[i], ok=(choice===q.correct);
+  var frac=Math.max(0,p.t/p.max), pay=0;
+  S.feedback=true; S.fb=p;
+  if(ok){
+    S.streak++;S.best=Math.max(S.best,S.streak);S.correct++;
+    var mult=1+0.1*Math.min(S.streak,10), base=p.trauma?300:100;
+    pay=Math.round((base+base*0.5*frac)*mult);S.cash+=pay;sfx("ok");
+  }else{
+    S.streak=0;S.wrong++;S.hearts--;S.missed.push({qi:p.qi,pick:choice});sfx("bad");
+  }
+  S.patients=S.patients.filter(function(x){return x.id!==p.id;});
+  walkOut(p,1,ok?"happy":"sad",ok?"+"+money(pay):"?");
+  setTimeout(function(){if(S&&S.running)layoutLine(false);},700);
+  S.spawn=Math.max(S.spawn,1.4);
+  var lvl=1+Math.floor(S.correct/5),leveled=false;
+  if(lvl>S.level){S.level=lvl;leveled=true;renderSpots();}
+  var gained="";
+  if(ok&&S.streak%5===0){S.pu50++;gained+=" 50/50 earned.";}
+  if(ok&&S.streak%8===0){S.puCof++;gained+=" Coffee break earned.";}
+  renderHud();
+  showFeedback(p,ok,choice,pay,gained);
+  if(leveled){S.spawn=Math.min(S.spawn,0.9);toast("Shift "+S.level+": another spot opens and arrivals speed up","");sfx("level");}
+  else if(gained){toast(gained.trim(),"good");sfx("power");}
+}
+function showFeedback(p,ok,choice,pay,gained){
+  var q=BANK[p.qi];
+  $("chart").querySelectorAll(".opt").forEach(function(b,i){
+    b.disabled=true;
+    if(p.opts[i]===q.correct) b.classList.add("right");
+    else if(p.opts[i]===choice) b.classList.add("wrong");
+  });
+  var x=xrayHTML(q), vis=$("visual");
+  vis.innerHTML=x.html; applyXray(vis,x);
+  var h='<div class="fb">';
+  h+=ok?'<div class="fb-res good">Treated. +'+money(pay)+'</div>':'<div class="fb-res bad">Missed. Correct answer: '+esc(q.correct)+'</div>';
+  if(q.note) h+='<p class="note">'+esc(q.note)+'</p>';
+  if(gained) h+='<p class="note">'+esc(gained.trim())+'</p>';
+  h+='<button type="button" id="contBtn" class="btn">'+(S.hearts<=0?"See shift report":"Next patient")+'</button></div>';
+  $("fb").innerHTML=h;
+  var cb=$("contBtn"); if(cb) cb.focus({preventScroll:true});
+}
+function cont(){
+  if(!S||!S.feedback) return;
+  S.feedback=false;S.fb=null;S.last=performance.now();
+  if(S.hearts<=0){endGame();return;}
+  autoSelect();
+}
+function usePower50(){
+  var p=cur(); if(!p||S.pu50<=0||S.feedback||p.hidden.length) return;
+  var q=BANK[p.qi],wrong=[];
+  p.opts.forEach(function(o,i){if(o!==q.correct)wrong.push(i);});
+  p.hidden=shuffle(wrong).slice(0,2);S.pu50--;sfx("power");
+  renderChart();renderHud();
+}
+function useCoffee(){
+  if(S.puCof<=0||S.coffee>0||S.feedback) return;
+  S.puCof--;S.coffee=6;sfx("power");renderHud();
+}
+
+/* ================= loop ================= */
+function tick(dt){
+  if(S.coffee>0){S.coffee=Math.max(0,S.coffee-dt);}
+  else{S.patients.forEach(function(p){p.t-=dt;});}
+  var out=S.patients.filter(function(p){return p.t<=0;});
+  if(out.length){
+    var selOut=false;
+    out.forEach(function(p){
+      S.hearts--;S.streak=0;S.left++;S.missed.push({qi:p.qi,pick:null});
+      toast(p.name+" walked out","bad"); if(p.id===S.sel) selOut=true;
+    });
+    sfx("lost");
+    S.patients=S.patients.filter(function(p){return p.t>0;});
+    out.forEach(function(p){walkOut(p,-1,"sad","!");});
+    setTimeout(function(){if(S&&S.running)layoutLine(false);},700);
+    S.spawn=Math.max(S.spawn,1.4);
+    if(S.hearts<=0){renderHud();endGame();return;}
+    if(selOut||S.sel==null) autoSelect(); else renderHud();
+  }
+  S.spawn-=dt;
+  if(S.spawn<=0){
+    if(S.patients.length<cap()){spawnPatient();S.spawn=interval()*(0.8+Math.random()*0.4);}
+    else S.spawn=0.5;
+  }
+}
+var lastHud=0;
+function paint(now){
+  S.patients.forEach(function(p){
+    if(!p.el) return;
+    var f=Math.max(0,p.t/p.max);
+    p.bar.style.width=(f*100).toFixed(1)+"%";
+    var t=tone(p);
+    if(p.tone!==t){p.el.classList.remove("tone-g","tone-a","tone-r");p.el.classList.add("tone-"+t);p.tone=t;
+      if(p.id===S.sel&&!S.feedback){var ex=$("exam");if(ex){ex.classList.remove("tone-g","tone-a","tone-r");ex.classList.add("tone-"+t);}}}
+  });
+  if(now-lastHud>250){lastHud=now;if(S.coffee>0||!$("freeze").hidden)renderHud();}
+}
+function frame(now){
+  if(!S||!S.running) return;
+  var dt=(now-S.last)/1000; S.last=now; dt=Math.min(Math.max(dt,0),0.1);
+  if(!S.paused&&!S.feedback) tick(dt);
+  if(!S.running) return;
+  paint(now);
+  S.raf=requestAnimationFrame(frame);
+}
+
+/* ================= start / end ================= */
+function startGame(){
+  if(S&&S.raf) cancelAnimationFrame(S.raf);
+  $("line").innerHTML="";
+  newGame(); show("game");
+  $("mapOv").hidden=true;$("pauseOv").hidden=true;$("pauseBtn").textContent="Pause";
+  renderSpots(); renderChart(); renderHud();
+  spawnPatient();
+  S.last=performance.now(); S.raf=requestAnimationFrame(frame);
+}
+function rankFor(c){return c>=8000?"Chief of Surgery":c>=4000?"Attending physician":c>=1500?"Resident":"Intern";}
+function endGame(){
+  S.running=false; if(S.raf) cancelAnimationFrame(S.raf);
+  var prevBest=parseInt(lsGet("erRushBest")||"0",10)||0,isBest=S.cash>prevBest;
+  if(isBest) lsSet("erRushBest",String(Math.round(S.cash)));
+  var total=S.correct+S.wrong+S.left,acc=total?Math.round(100*S.correct/total):0;
+  $("rankLine").textContent=rankFor(S.cash)+(isBest&&S.cash>0?" · New personal best":"");
+  function tile(l,v){return '<div class="stat"><span class="lbl">'+l+'</span><b>'+v+'</b></div>';}
+  $("sum").innerHTML=tile("Cash earned",money(S.cash))+tile("Treated",S.correct)+tile("Accuracy",acc+"%")+tile("Best streak",S.best)+tile("Shift reached",S.level)+tile("Personal best",money(Math.max(prevBest,S.cash)));
+  var seen={},h="";
+  S.missed.forEach(function(m){
+    if(seen[m.qi]) return; seen[m.qi]=1;
+    var q=BANK[m.qi];
+    h+='<li><p class="q">'+esc(q.q)+'</p><p><b>Answer:</b> '+esc(q.correct)+'</p>'+(q.note?'<p class="note">'+esc(q.note)+'</p>':'')+
+       '<p class="note">'+(m.pick?('You chose: '+esc(m.pick)):'This patient walked out before you got to them.')+'</p></li>';
+  });
+  $("review").innerHTML=h||'<li style="border-left-color:var(--good)"><p><b>Clean shift.</b> No charts to review.</p></li>';
+  show("over");
+}
+
+/* ================= title art ================= */
+function titleArt(){
+  var art=$("tArt"),demo=[
+    {look:{skin:"#d39c6e",hair:"long",hairColor:"#2b1d14",shirt:"#3b7dd8",pants:"#2c3e50"},glow:"arm",side:1,trauma:false,consult:false,left:"14%",tone:"a"},
+    {look:{skin:"#f3d3b8",hair:"short",hairColor:"#b07a3f",shirt:"#d8572a",pants:"#3d4f63"},glow:"leg",side:-1,trauma:true,consult:false,left:"44%",tone:"r"},
+    {look:{skin:"#8d5a36",hair:"curly",hairColor:"#1b1b1b",shirt:"#2f9e6b",pants:"#273a6b"},glow:"head",side:1,trauma:false,consult:false,left:"74%",tone:"g"}
+  ],h='<div class="wallband"></div><div class="floor"></div>';
+  demo.forEach(function(d){h+='<div class="tfig tone-'+d.tone+'" style="left:'+d.left+';transform:translateX(-50%)">'+figSVG(d)+'</div>';});
+  h+='<span class="tag" style="left:50%;top:14px;transform:translateX(-50%)">Trauma</span>';
+  art.innerHTML=h;
+}
+
+/* ================= wiring ================= */
+function setTitleBest(){var b=parseInt(lsGet("erRushBest")||"0",10)||0;$("bestLine").textContent=b>0?("Personal best: "+money(b)):"";}
+function setMute(m){muted=m;lsSet("erRushMute",m?"1":"0");$("muteBtn").textContent=m?"Sound off":"Sound on";}
+function setPause(p){
+  if(!S||!S.running) return;
+  S.paused=p;$("pauseOv").hidden=!p;$("pauseBtn").textContent=p?"Resume":"Pause";S.last=performance.now();renderHud();
+  if(p) $("resumeBtn").focus({preventScroll:true});
+}
+if(MAP_SRC)$("mapImg").src=MAP_SRC;
+$("startBtn").addEventListener("click",startGame);
+$("againBtn").addEventListener("click",startGame);
+function openMap(){$("mapOv").hidden=false;$("mapClose").focus({preventScroll:true});}
+$("mapBtn1").addEventListener("click",openMap);
+$("mapBtn2").addEventListener("click",openMap);
+$("mapClose").addEventListener("click",function(){$("mapOv").hidden=true;});
+$("mapOv").addEventListener("click",function(e){if(e.target===$("mapOv"))$("mapOv").hidden=true;});
+$("pauseBtn").addEventListener("click",function(){setPause(!S.paused);});
+$("resumeBtn").addEventListener("click",function(){setPause(false);});
+$("muteBtn").addEventListener("click",function(){setMute(!muted);});
+$("endBtn").addEventListener("click",function(){if(S&&S.running)endGame();});
+$("pu50").addEventListener("click",usePower50);
+$("puCof").addEventListener("click",useCoffee);
+$("chart").addEventListener("click",function(e){
+  var o=e.target.closest(".opt"); if(o&&!o.disabled){answer(parseInt(o.getAttribute("data-i"),10));return;}
+  if(e.target.closest("#contBtn")) cont();
+});
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"){if(!$("mapOv").hidden)$("mapOv").hidden=true;return;}
+  if(!S||!S.running||S.paused||$("game").hidden) return;
+  if(e.key>="1"&&e.key<="4"&&!S.feedback){answer(parseInt(e.key,10)-1);}
+  else if((e.key==="Enter"||e.key===" ")&&S.feedback){e.preventDefault();cont();}
+});
+var rzT=0;
+window.addEventListener("resize",function(){clearTimeout(rzT);rzT=setTimeout(function(){if(S&&S.running){renderSpots();layoutLine(true);}},120);});
+document.addEventListener("visibilitychange",function(){if(S&&S.running&&document.hidden&&!S.feedback)setPause(true);});
+setMute(muted); setTitleBest(); titleArt();
+})();
+</script>
+
+</body>
+</html>
